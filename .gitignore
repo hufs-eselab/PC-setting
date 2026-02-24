@@ -1,0 +1,12 @@
+# Compiled binaries
+node-actuator/resource-daemon
+ebpf/hcbs-agent
+cpu_util_sender/test-agent
+
+# Compiled eBPF object (must be rebuilt per kernel)
+
+# Logs
+*.log
+
+# Go build artifacts
+**/vendor/

@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-actuator
+  namespace: mc-kube-system
+  labels:
+    k8s-app: node-actuator
+spec:
+  selector:
+    matchLabels:
+      name: node-actuator
+  template:
+    metadata:
+      labels:
+        name: node-actuator
+    spec:
+      hostNetwork: true  # Use host network for easier communication
+      containers:
+      - name: node-actuator
+        image: ghcr.io/hufs-ese-lab/node-actuator:v1  # Replace with your registry path
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true  # Required for cgroup access
+        volumeMounts:
+        - name: sys
+          mountPath: /sys
+        - name: cgroup
+          mountPath: /sys/fs/cgroup
+        - name: containerd-sock
+          mountPath: /run/containerd/containerd.sock
+        - name: crictl-bin
+          mountPath: /usr/local/bin/crictl
+          readOnly: true
+        resources:
+          limits:
+            memory: 200Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz  # You might need to add this endpoint
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+      volumes:
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: cgroup
+        hostPath:
+          path: /sys/fs/cgroup
+      - name: containerd-sock
+        hostPath:
+          path: /run/containerd/containerd.sock
+      - name: crictl-bin
+        hostPath:
+          path: /usr/bin/crictl
+      serviceAccount: node-actuator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-actuator
+  namespace: mc-kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-actuator
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-actuator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-actuator
+subjects:
+- kind: ServiceAccount
+  name: node-actuator
+  namespace: mc-kube-system
