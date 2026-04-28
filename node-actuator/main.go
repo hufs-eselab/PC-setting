@@ -382,53 +382,50 @@ func writeRuntimeFile(cgPath string, runtime int, core *string) error {
 	cpuRTRuntimePath := filepath.Join(cgPath, cgroupRTRuntime)
 	return writeCgroupFile(cpuRTRuntimePath, fmt.Sprintf("%d", runtime))
 }
-
 // getCurrentMultiRuntime reads the current multi-runtime value for a specific core range
 func getCurrentMultiRuntime(cgPath string, coreRange string) int {
-	cpuRTMultiRuntimePath := filepath.Join(cgPath, cgroupRTMultiRuntime)
-	data, err := os.ReadFile(cpuRTMultiRuntimePath)
-	if err != nil {
-		return 0
-	}
-	
-	content := string(data)
-	if !strings.Contains(content, coreRange) {
-		return 0
-	}
-	
-	fields := strings.Fields(content)
-	for i := 0; i < len(fields); i += 2 {
-		if i+1 < len(fields) && fields[i] == coreRange {
-			if rt, err := strconv.Atoi(fields[i+1]); err == nil {
-				return rt
-			}
-		}
-	}
-	return 0
-}
+        cpuRTMultiRuntimePath := filepath.Join(cgPath, cgroupRTMultiRuntime)
+        data, err := os.ReadFile(cpuRTMultiRuntimePath)
+        if err != nil {
+                return 0
+        }
 
+        content := strings.TrimSpace(string(data))
+        fields := strings.Fields(content)
+
+        coreIdx, err := strconv.Atoi(coreRange)
+        if err != nil || coreIdx < 0 || coreIdx >= len(fields) {
+                return 0
+        }
+
+        if rt, err := strconv.Atoi(fields[coreIdx]); err == nil {
+                return rt
+        }
+
+        return 0
+}
 // applyRuntimeWithOrder applies runtime-only updates in the correct order based on increase/decrease
 func applyRuntimeWithOrder(containerPath, podPath string, runtime int, core *string, decreasing bool) error {
-	if decreasing {
-		// Decreasing: Container (child) first, then Pod (parent)
-		log.Printf("Runtime-only mode: decreasing runtime, container first")
-		if err := writeRuntimeOnly(containerPath, runtime, core); err != nil {
-			return fmt.Errorf("failed to update container runtime: %w", err)
-		}
-		if err := writeRuntimeOnly(podPath, runtime, core); err != nil {
-			return fmt.Errorf("failed to update pod runtime: %w", err)
-		}
-	} else {
-		// Increasing: Pod (parent) first, then Container (child)
-		log.Printf("Runtime-only mode: increasing runtime, pod first")
-		if err := writeRuntimeOnly(podPath, runtime, core); err != nil {
-			return fmt.Errorf("failed to update pod runtime: %w", err)
-		}
-		if err := writeRuntimeOnly(containerPath, runtime, core); err != nil {
-			return fmt.Errorf("failed to update container runtime: %w", err)
-		}
-	}
-	return nil
+        if decreasing {
+                // Decreasing: Container (child) first, then Pod (parent)
+                log.Printf("Runtime-only mode: decreasing runtime, container first")
+                if err := writeRuntimeOnly(containerPath, runtime, core); err != nil {
+                        return fmt.Errorf("failed to update container runtime: %w", err)
+                }
+                if err := writeRuntimeOnly(podPath, runtime, core); err != nil {
+                        return fmt.Errorf("failed to update pod runtime: %w", err)
+                }
+        } else {
+                // Increasing: Pod (parent) first, then Container (child)
+                log.Printf("Runtime-only mode: increasing runtime, pod first")
+                if err := writeRuntimeOnly(podPath, runtime, core); err != nil {
+                        return fmt.Errorf("failed to update pod runtime: %w", err)
+                }
+                if err := writeRuntimeOnly(containerPath, runtime, core); err != nil {
+                        return fmt.Errorf("failed to update container runtime: %w", err)
+                }
+        }
+        return nil
 }
 
 // readRtValues reads current cpu.rt_period_us and cpu.rt_runtime_us under the given cgroup path
