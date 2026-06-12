@@ -101,6 +101,33 @@ func handleRenice(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Renice applied successfully"))
 }
 
+func getSharedToken() string {
+	if token := os.Getenv("MCKUBE_SHARED_TOKEN"); token != "" {
+		return token
+	}
+	tokenBytes, err := os.ReadFile("/etc/mckube/token")
+	if err == nil {
+		return strings.TrimSpace(string(tokenBytes))
+	}
+	return ""
+}
+
+func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := getSharedToken()
+		if token != "" {
+			authHeader := r.Header.Get("Authorization")
+			expectedHeader := "Bearer " + token
+			if authHeader != expectedHeader {
+				log.Printf("Unauthorized attempt from %s: invalid or missing token (Auth header: %s)", r.RemoteAddr, authHeader)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		next(w, r)
+	}
+}
+
 func main() {
 	listener, err := net.Listen("tcp", "0.0.0.0:8080")
 	if err != nil {
@@ -111,8 +138,8 @@ func main() {
 	log.Printf("Resource Controller listening on port %d", 8080)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/renice", handleRenice)
-	mux.HandleFunc("/cgroup", handleCgroup)
+	mux.HandleFunc("/renice", authMiddleware(handleRenice))
+	mux.HandleFunc("/cgroup", authMiddleware(handleCgroup))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))

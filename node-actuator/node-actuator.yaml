@@ -17,7 +17,7 @@ spec:
       hostNetwork: true  # Use host network for easier communication
       containers:
       - name: node-actuator
-        image: ghcr.io/hufs-ese-lab/node-actuator:v2  # Replace with your registry path
+        image: ghcr.io/hufs-eselab/node-actuator:latest  # Replace with your registry path
         imagePullPolicy: Always
         securityContext:
           privileged: true  # Required for cgroup access
@@ -30,6 +30,9 @@ spec:
           mountPath: /run/containerd/containerd.sock
         - name: crictl-bin
           mountPath: /usr/local/bin/crictl
+          readOnly: true
+        - name: shared-token
+          mountPath: /etc/mckube
           readOnly: true
         resources:
           limits:
@@ -56,6 +59,9 @@ spec:
       - name: crictl-bin
         hostPath:
           path: /usr/bin/crictl
+      - name: shared-token
+        secret:
+          secretName: mckube-shared-token
       serviceAccount: node-actuator
 ---
 apiVersion: v1
